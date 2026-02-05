@@ -43,7 +43,7 @@ func main() {
 
 		timer = time.AfterFunc(delay, func() {
 			app.QueueUpdateDraw(func() {
-				tvResult.SetText(runExpression(taExp.GetText(), parsedJSON))
+				tvResult.SetText(runExpression(taExp.GetText(), &parsedJSON))
 			})
 		})
 	})
@@ -56,7 +56,7 @@ func main() {
 				tvResult.SetText(err.Error())
 				return
 			}
-			tvResult.SetText(runExpression(taExp.GetText(), parsedJSON))
+			tvResult.SetText(runExpression(taExp.GetText(), &parsedJSON))
 		}
 
 		if timer != nil {
@@ -73,14 +73,14 @@ func main() {
 	}
 }
 
-func runExpression(expression string, input map[string]any) string {
+func runExpression(expression string, input *map[string]any) string {
 	query, err := gojq.Parse(expression)
 	if err != nil {
 		return err.Error()
 	}
 
 	var result strings.Builder
-	iter := query.Run(input)
+	iter := query.Run(*input)
 	for {
 		v, ok := iter.Next()
 		if !ok {
