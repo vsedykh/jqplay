@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.design/x/clipboard"
+
 	"github.com/gdamore/tcell/v2"
 	"github.com/itchyny/gojq"
 	"github.com/rivo/tview"
@@ -39,6 +41,22 @@ func main() {
 			app.SetFocus(taJson) // Set focus to the input field
 		case tcell.KeyCtrlR:
 			app.SetFocus(tvResult) // Set focus to the input field
+		case tcell.KeyCtrlQ:
+			app.Stop()
+			return nil
+		case tcell.KeyCtrlC:
+			el := app.GetFocus()
+			if ta, ok := el.(*tview.TextArea); ok {
+				text, _, _ := ta.GetSelection()
+				clipboard.Write(clipboard.FmtText, []byte(text))
+				return nil
+			}
+			if tv, ok := el.(*tview.TextView); ok {
+				text := tv.GetText(true)
+				clipboard.Write(clipboard.FmtText, []byte(text))
+				return nil
+			}
+			return nil
 		}
 		return event
 	})
@@ -81,7 +99,7 @@ func main() {
 		})
 	})
 
-	if err := app.SetRoot(mainView, true).EnableMouse(true).EnablePaste(true).SetTitle("JQplay").Run(); err != nil {
+	if err := app.SetRoot(mainView, true).EnableMouse(true).SetTitle("JQplay").Run(); err != nil {
 		panic(err)
 	}
 }
