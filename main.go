@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gdamore/tcell/v2"
 	"github.com/itchyny/gojq"
 	"github.com/rivo/tview"
 )
@@ -21,14 +22,26 @@ func main() {
 	taExp := tview.NewTextArea().
 		SetWrap(false).
 		SetPlaceholder("Enter expression here...")
-	taExp.SetTitle("JQ expression").SetBorder(true)
+	taExp.SetTitle("JQ expression (^E)").SetBorder(true)
 	taJson := tview.NewTextArea().
 		SetWrap(false).
 		SetPlaceholder("Enter JSON here...")
-	taJson.SetTitle("JSON").SetBorder(true)
+	taJson.SetTitle("JSON (^J)").SetBorder(true)
 	tvResult := tview.NewTextView().
 		SetWrap(true)
-	tvResult.SetTitle("Result").SetBorder(true)
+	tvResult.SetTitle("Result (^R)").SetBorder(true)
+
+	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyCtrlE:
+			app.SetFocus(taExp) // Set focus to the input field
+		case tcell.KeyCtrlJ:
+			app.SetFocus(taJson) // Set focus to the input field
+		case tcell.KeyCtrlR:
+			app.SetFocus(tvResult) // Set focus to the input field
+		}
+		return event
+	})
 
 	mainView := tview.NewGrid().
 		SetRows(-1, -2).
@@ -68,7 +81,7 @@ func main() {
 		})
 	})
 
-	if err := app.SetRoot(mainView, true).EnableMouse(true).EnablePaste(true).Run(); err != nil {
+	if err := app.SetRoot(mainView, true).EnableMouse(true).EnablePaste(true).SetTitle("JQplay").Run(); err != nil {
 		panic(err)
 	}
 }
