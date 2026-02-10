@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -18,6 +19,9 @@ func main() {
 	parsedJSON := map[string]any{}
 	var timer *time.Timer
 	const delay = 500 * time.Millisecond
+	var taJsonWrap bool
+	var taExpWrap bool
+	var tvResultWrap bool
 
 	app := tview.NewApplication()
 
@@ -32,6 +36,55 @@ func main() {
 	tvResult := tview.NewTextView().
 		SetWrap(true)
 	tvResult.SetTitle("Result (^R)").SetBorder(true)
+	tvHelpInfo := tview.NewTextView().
+		SetText("Exit: ctrl+q | Copy: ^c | Paste: ^v | Select all: ^a | Minify JSON: ^m | Format JSON: ^f | Wrap: ^w")
+
+	taJson.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyCtrlF:
+			var formattedJson bytes.Buffer
+			err := json.Indent(&formattedJson, []byte(taJson.GetText()), "", "  ")
+			if err != nil {
+				return nil
+			}
+			taJson.SetText(formattedJson.String(), false)
+		case tcell.KeyCtrlM:
+			var miniJson bytes.Buffer
+			err := json.Compact(&miniJson, []byte(taJson.GetText()))
+			if err != nil {
+				return nil
+			}
+			taJson.SetText(miniJson.String(), false)
+		case tcell.KeyCtrlW:
+			taJsonWrap = !taJsonWrap
+			taJson.SetWrap(!taJsonWrap)
+			return nil
+		}
+
+		return event
+	})
+
+	taExp.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyCtrlW:
+			taExpWrap = !taExpWrap
+			taExp.SetWrap(!taExpWrap)
+			return nil
+		}
+
+		return event
+	})
+
+	tvResult.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyCtrlW:
+			tvResultWrap = !tvResultWrap
+			tvResult.SetWrap(!tvResultWrap)
+			return nil
+		}
+
+		return event
+	})
 
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
@@ -57,15 +110,23 @@ func main() {
 				return nil
 			}
 			return nil
+		case tcell.KeyCtrlA:
+			el := app.GetFocus()
+			if ta, ok := el.(*tview.TextArea); ok {
+				ta.Select(0, ta.GetTextLength())
+				return nil
+			}
+			return event
 		}
 		return event
 	})
 
 	mainView := tview.NewGrid().
-		SetRows(-1, -2).
-		AddItem(taExp, 0, 0, 1, 1, 0, 0, true).
+		SetRows(-1, -2, 1).
+		AddItem(taExp, 0, 0, 1, 1, 0, 0, false).
 		AddItem(tvResult, 0, 1, 1, 1, 0, 0, false).
-		AddItem(taJson, 1, 0, 1, 2, 0, 0, false)
+		AddItem(taJson, 1, 0, 1, 2, 0, 0, true).
+		AddItem(tvHelpInfo, 2, 0, 1, 2, 0, 0, false)
 
 	taExp.SetChangedFunc(func() {
 		if timer != nil {
@@ -79,12 +140,16 @@ func main() {
 		})
 	})
 
+	taExp.SetFocusFunc(func() {
+		tvHelpInfo.SetText("Exit: ctrl+q | Copy: ^c | Paste: ^v | Select all: ^a | Wrap: ^w")
+	})
+
 	taJson.SetChangedFunc(func() {
 		parseAndUpdate := func() {
 			parsedJSON = make(map[string]any)
 			err := json.Unmarshal([]byte(taJson.GetText()), &parsedJSON)
 			if err != nil {
-				tvResult.SetText(err.Error())
+				tvResult.SetText(fmt.Sprintf("invalid json: %s", err.Error()))
 				return
 			}
 			tvResult.SetText(runExpression(taExp.GetText(), parsedJSON))
@@ -99,7 +164,15 @@ func main() {
 		})
 	})
 
-	if err := app.SetRoot(mainView, true).EnableMouse(true).SetTitle("JQplay").Run(); err != nil {
+	taJson.SetFocusFunc(func() {
+		tvHelpInfo.SetText("Exit: ctrl+q | Copy: ^c | Paste: ^v | Select all: ^a | Minify JSON: ^m | Format JSON: ^f | Wrap: ^w")
+	})
+
+	tvResult.SetFocusFunc(func() {
+		tvHelpInfo.SetText("Exit: ctrl+q | Copy: ^c | Minify JSON: ^m | Format JSON: ^f | Wrap: ^w")
+	})
+
+	if err := app.SetRoot(mainView, true).EnableMouse(true).EnablePaste(true).SetTitle("JQplay").Run(); err != nil {
 		panic(err)
 	}
 }
@@ -107,7 +180,7 @@ func main() {
 func runExpression(expression string, input map[string]any) string {
 	query, err := gojq.Parse(expression)
 	if err != nil {
-		return err.Error()
+		return fmt.Sprintf("invalid jq expression: %s", err.Error())
 	}
 
 	var result strings.Builder
@@ -121,7 +194,7 @@ func runExpression(expression string, input map[string]any) string {
 			if err, ok := err.(*gojq.HaltError); ok && err.Value() == nil {
 				break
 			}
-			return err.Error()
+			return fmt.Sprintf("invalid jq expression: %s", err.Error())
 		}
 
 		jsonData, err := json.Marshal(v)
